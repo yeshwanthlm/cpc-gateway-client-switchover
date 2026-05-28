@@ -108,10 +108,10 @@ Create truststore files for both clusters:
 cd certs
 
 # Download certificates for primary cluster
-./download-cc-certs.sh pkc-oxqxx9.us-east-1.aws.confluent.cloud:9092
+./download-cc-certs.sh pkc-XXXXXX.us-east-1.aws.confluent.cloud:9092
 
 # Download certificates for DR cluster
-./download-cc-certs.sh pkc-lgk0v.us-west1.gcp.confluent.cloud:9092
+./download-cc-certs.sh pkc-XXXXXX.us-west1.gcp.confluent.cloud:9092
 ```
 
 This creates truststore files in `ssl/<cluster-name>/` directories.
