@@ -1,0 +1,14 @@
+# Copy this file to terraform.tfvars and fill in your Confluent Cloud credentials
+
+# Get these from https://confluent.cloud/settings/api-keys
+confluent_cloud_api_key    = "YOUR_CONFLUENT_CLOUD_API_KEY"
+confluent_cloud_api_secret = "YOUR_CONFLUENT_CLOUD_API_SECRET"
+
+# Optional: Customize cluster names and environment
+environment_name = "cpc-gateway-demo"
+aws_cluster_name = "aws-us-east-1-cluster"
+gcp_cluster_name = "gcp-us-west-cluster"
+
+# Availability zone configuration
+# Options: SINGLE_ZONE (cheaper) or MULTI_ZONE (higher availability)
+availability = "SINGLE_ZONE"

@@ -1,0 +1,8 @@
+# AWS EKS Cluster Configuration
+# Copy this file to terraform.tfvars and customize as needed
+# Or use the deploy.sh script which will auto-generate this from .env
+
+aws_region         = "us-west-2"
+cluster_name       = "my-eks-cluster"
+kubernetes_version = "1.31"
+instance_type      = "t3.medium"
