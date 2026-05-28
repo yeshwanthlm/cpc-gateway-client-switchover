@@ -35,7 +35,7 @@ spec:
         name: cc-dr-cluster
         bootstrapServers:
           - id: CC_DR
-            endpoint: pkc-619z3.us-east1.gcp.confluent.cloud:9092
+            endpoint: pkc-lgk0v.us-west1.gcp.confluent.cloud:9092
             tls:
               secretRef: cc-dr-tls
         nodeIdRanges:
@@ -48,8 +48,8 @@ spec:
       brokerIdentificationStrategy:
         type: port
       streamingDomain:
-        name: cc-dr
-        bootstrapServerId: CC_DR
+        name: cc-primary
+        bootstrapServerId: CC_PRIMARY
       security:
         auth: passthrough
         client:

@@ -6,10 +6,10 @@ metadata:
 spec:
   restartPolicy: Never
   hostAliases:
-    - ip: "52.38.125.114" #Change after running NSLOOKUP to your ALB
+    - ip: "34.217.151.188"
       hostnames:
         - "kafka.cpc.yesh.com"
-    - ip: "52.89.255.46" #Change after running NSLOOKUP to your ALB
+    - ip: "52.26.146.247"
       hostnames:
         - "kafka.cpc.yesh.com"
   securityContext:
