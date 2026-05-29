@@ -2,6 +2,10 @@
 
 This guide demonstrates how to set up Confluent Gateway on EKS to enable seamless switchover between Confluent Cloud clusters (Primary and DR).
 
+## Architecture Diagram:
+<img width="1540" height="870" alt="image (2)" src="https://github.com/user-attachments/assets/f0721e47-cf64-4e8d-aced-060d30f414f2" />
+
+
 ## 🚀 Quick Start - Automated Deployment
 
 **New!** This project now includes complete automation for deployment and cleanup:
