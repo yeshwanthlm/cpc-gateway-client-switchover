@@ -22,7 +22,7 @@ spec:
         name: cc-primary-cluster
         bootstrapServers:
           - id: CC_PRIMARY
-            endpoint: pkc-XXXXXX.us-east-1.aws.confluent.cloud:9092
+            endpoint: pkc-XXXXXXX.us-east-1.aws.confluent.cloud:9092
             tls:
               secretRef: cc-primary-tls
         nodeIdRanges:
@@ -35,7 +35,7 @@ spec:
         name: cc-dr-cluster
         bootstrapServers:
           - id: CC_DR
-            endpoint: pkc-XXXXXX.us-west1.gcp.confluent.cloud:9092
+            endpoint: pkc-XXXXXXX.us-west1.gcp.confluent.cloud:9092
             tls:
               secretRef: cc-dr-tls
         nodeIdRanges:

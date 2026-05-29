@@ -76,3 +76,59 @@ output "connection_details" {
     }
   }
 }
+
+# Service Account IDs (needed for creating ACLs)
+output "aws_service_account_id" {
+  description = "AWS cluster service account ID (for ACL creation)"
+  value       = confluent_service_account.aws_cluster_manager.id
+}
+
+output "gcp_service_account_id" {
+  description = "GCP cluster service account ID (for ACL creation)"
+  value       = confluent_service_account.gcp_cluster_manager.id
+}
+
+output "bootstrap_instructions" {
+  description = "One-time bootstrap instructions for Terraform automation"
+  value       = <<-EOT
+
+    ╔════════════════════════════════════════════════════════════════╗
+    ║  ONE-TIME BOOTSTRAP REQUIRED                                   ║
+    ╠════════════════════════════════════════════════════════════════╣
+    ║  To enable full Terraform automation, grant your Cloud API key ║
+    ║  OrganizationAdmin permissions (one-time manual step).         ║
+    ║                                                                 ║
+    ║  1. Go to: https://confluent.cloud/settings/api-keys          ║
+    ║  2. Find: PPBQ6IBKOFRNECEG                                    ║
+    ║  3. Add role: OrganizationAdmin                               ║
+    ║  4. Run: terraform apply                                      ║
+    ║                                                                 ║
+    ║  After this, everything is managed by Terraform!              ║
+    ║                                                                 ║
+    ║  See: BOOTSTRAP.md for detailed instructions                  ║
+    ╚════════════════════════════════════════════════════════════════╝
+
+  EOT
+}
+
+output "terraform_managed_resources" {
+  description = "List of resources managed by Terraform after bootstrap"
+  value       = <<-EOT
+
+    After bootstrap, Terraform manages:
+
+    Infrastructure:
+      ✓ Environment: ${confluent_environment.main.id}
+      ✓ AWS Cluster: ${confluent_kafka_cluster.aws_cluster.id}
+      ✓ GCP Cluster: ${confluent_kafka_cluster.gcp_cluster.id}
+      ✓ Service Accounts: ${confluent_service_account.aws_cluster_manager.id}, ${confluent_service_account.gcp_cluster_manager.id}
+      ✓ API Keys: 2 cluster-specific keys
+
+    Access Control (after bootstrap):
+      ✓ Role Bindings: CloudClusterAdmin for both clusters
+      ✓ ACLs: 10 total (5 per cluster)
+        - CREATE, WRITE, READ, DESCRIBE for topics
+        - READ for consumer groups
+
+  EOT
+}

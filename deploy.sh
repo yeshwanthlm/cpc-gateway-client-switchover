@@ -169,7 +169,7 @@ kubectl wait --for=condition=Ready pod -l app=confluent-operator -n confluent --
 print_success "Confluent operator is ready"
 
 # -----------------------------------------------------------------------------
-# Step 3: Deploy Confluent Cloud Clusters
+# Step 3: Deploy Confluent Cloud Clusters with ACLs
 # -----------------------------------------------------------------------------
 
 print_header "Step 3: Deploying Confluent Cloud Clusters"
@@ -189,20 +189,37 @@ EOF
 print_info "Initializing Terraform..."
 terraform init
 
-print_info "Deploying Confluent Cloud clusters (this may take 5-10 minutes)..."
-terraform apply -auto-approve
+print_info "Deploying Confluent Cloud clusters with ACLs (this may take 5-10 minutes)..."
+print_warning "Note: ACL creation requires your Cloud API key to have OrganizationAdmin role"
+print_info "If ACL creation fails, see confluent-terraform/BOOTSTRAP.md"
 
-print_success "Confluent Cloud clusters deployed successfully"
+# Try to apply with ACLs
+if terraform apply -auto-approve; then
+    print_success "Confluent Cloud clusters and ACLs deployed successfully"
+else
+    print_error "Terraform apply failed"
+    print_warning "This is likely due to insufficient Cloud API key permissions"
+    print_info "To fix:"
+    print_info "  1. Go to: https://confluent.cloud/settings/api-keys"
+    print_info "  2. Find your Cloud API key: ${CONFLUENT_CLOUD_API_KEY}"
+    print_info "  3. Add role binding: OrganizationAdmin"
+    print_info "  4. Run: cd confluent-terraform && terraform apply"
+    print_info "  5. Then resume: ./deploy.sh --skip-terraform"
+    exit 1
+fi
 
-# Get cluster endpoints
+# Get cluster endpoints and API keys
+print_info "Retrieving cluster information..."
 AWS_CLUSTER_ENDPOINT=$(terraform output -raw aws_cluster_bootstrap_endpoint | sed 's/SASL_SSL:\/\///')
 GCP_CLUSTER_ENDPOINT=$(terraform output -raw gcp_cluster_bootstrap_endpoint | sed 's/SASL_SSL:\/\///')
 AWS_CLUSTER_API_KEY=$(terraform output -raw aws_cluster_api_key)
 AWS_CLUSTER_API_SECRET=$(terraform output -raw aws_cluster_api_secret)
 GCP_CLUSTER_API_KEY=$(terraform output -raw gcp_cluster_api_key)
 GCP_CLUSTER_API_SECRET=$(terraform output -raw gcp_cluster_api_secret)
+AWS_SERVICE_ACCOUNT_ID=$(terraform output -raw aws_service_account_id)
+GCP_SERVICE_ACCOUNT_ID=$(terraform output -raw gcp_service_account_id)
 
-print_success "Cluster endpoints retrieved"
+print_success "Cluster information retrieved"
 
 cd ..
 
@@ -212,13 +229,35 @@ cd ..
 
 print_header "Steps 4-6: Creating Certificates and Secrets"
 
-# Add cluster endpoints to .env for Makefile
-echo "AWS_CLUSTER_ENDPOINT=${AWS_CLUSTER_ENDPOINT}" >> .env
-echo "GCP_CLUSTER_ENDPOINT=${GCP_CLUSTER_ENDPOINT}" >> .env
-echo "AWS_CLUSTER_API_KEY=${AWS_CLUSTER_API_KEY}" >> .env
-echo "AWS_CLUSTER_API_SECRET=${AWS_CLUSTER_API_SECRET}" >> .env
-echo "GCP_CLUSTER_API_KEY=${GCP_CLUSTER_API_KEY}" >> .env
-echo "GCP_CLUSTER_API_SECRET=${GCP_CLUSTER_API_SECRET}" >> .env
+# Update .env with cluster information from Terraform
+print_info "Updating .env file with cluster information..."
+
+# Remove old entries if they exist
+grep -v "^AWS_CLUSTER_ENDPOINT=" .env > .env.tmp 2>/dev/null || cp .env .env.tmp
+grep -v "^GCP_CLUSTER_ENDPOINT=" .env.tmp > .env.tmp2 2>/dev/null || cp .env.tmp .env.tmp2
+grep -v "^AWS_CLUSTER_API_KEY=" .env.tmp2 > .env.tmp3 2>/dev/null || cp .env.tmp2 .env.tmp3
+grep -v "^AWS_CLUSTER_API_SECRET=" .env.tmp3 > .env.tmp4 2>/dev/null || cp .env.tmp3 .env.tmp4
+grep -v "^GCP_CLUSTER_API_KEY=" .env.tmp4 > .env.tmp5 2>/dev/null || cp .env.tmp4 .env.tmp5
+grep -v "^GCP_CLUSTER_API_SECRET=" .env.tmp5 > .env.tmp6 2>/dev/null || cp .env.tmp5 .env.tmp6
+grep -v "^AWS_SERVICE_ACCOUNT_ID=" .env.tmp6 > .env.tmp7 2>/dev/null || cp .env.tmp6 .env.tmp7
+grep -v "^GCP_SERVICE_ACCOUNT_ID=" .env.tmp7 > .env 2>/dev/null || cp .env.tmp7 .env
+rm -f .env.tmp .env.tmp2 .env.tmp3 .env.tmp4 .env.tmp5 .env.tmp6 .env.tmp7
+
+# Append new values
+cat >> .env <<EOF
+
+# Auto-populated from Terraform (confluent-terraform/)
+AWS_CLUSTER_ENDPOINT=${AWS_CLUSTER_ENDPOINT}
+GCP_CLUSTER_ENDPOINT=${GCP_CLUSTER_ENDPOINT}
+AWS_CLUSTER_API_KEY=${AWS_CLUSTER_API_KEY}
+AWS_CLUSTER_API_SECRET=${AWS_CLUSTER_API_SECRET}
+GCP_CLUSTER_API_KEY=${GCP_CLUSTER_API_KEY}
+GCP_CLUSTER_API_SECRET=${GCP_CLUSTER_API_SECRET}
+AWS_SERVICE_ACCOUNT_ID=${AWS_SERVICE_ACCOUNT_ID}
+GCP_SERVICE_ACCOUNT_ID=${GCP_SERVICE_ACCOUNT_ID}
+EOF
+
+print_success ".env file updated with cluster credentials"
 
 print_info "Using Makefile to automate certificate creation..."
 print_info "This will:"
@@ -308,18 +347,38 @@ echo ""
 print_info "Summary:"
 echo "  - EKS Cluster: ${EKS_CLUSTER_NAME} (${AWS_REGION})"
 echo "  - AWS Kafka Cluster: ${AWS_CLUSTER_ENDPOINT}"
+echo "    • Service Account: ${AWS_SERVICE_ACCOUNT_ID}"
+echo "    • API Key: ${AWS_CLUSTER_API_KEY}"
 echo "  - GCP Kafka Cluster: ${GCP_CLUSTER_ENDPOINT}"
+echo "    • Service Account: ${GCP_SERVICE_ACCOUNT_ID}"
+echo "    • API Key: ${GCP_CLUSTER_API_KEY}"
 echo "  - Gateway Domain: ${GATEWAY_DOMAIN}"
 echo "  - LoadBalancer: ${LB_HOST}"
 echo ""
+print_success "ACLs and Permissions:"
+echo "  ✓ Role bindings created (CloudClusterAdmin)"
+echo "  ✓ ACLs created (CREATE, WRITE, READ, DESCRIBE for topics)"
+echo "  ✓ Consumer group permissions granted"
+echo ""
 print_info "Next Steps:"
+echo ""
 echo "  1. Update your DNS (Route53) to point ${GATEWAY_DOMAIN} to the LoadBalancer"
-echo "  2. Test the gateway connection:"
-echo "     kubectl exec kafka-tools -n confluent -- kafka-broker-api-versions \\"
+echo ""
+echo "  2. Test topic listing:"
+echo "     kubectl exec kafka-tools -n confluent -- kafka-topics \\"
 echo "       --bootstrap-server ${GATEWAY_DOMAIN}:9092 \\"
-echo "       --command-config /etc/kafka/client-dr/client-dr.properties"
-echo "  3. To switch between clusters, update kubernetes-resources/gateway.yaml"
+echo "       --command-config /etc/kafka/client-primary/client-primary.properties \\"
+echo "       --list"
+echo ""
+echo "  3. Test message production:"
+echo "     kubectl exec kafka-tools -n confluent -- bash -c 'echo -e \"test 1\\ntest 2\\ntest 3\" | kafka-console-producer \\"
+echo "       --bootstrap-server ${GATEWAY_DOMAIN}:9092 \\"
+echo "       --producer.config /etc/kafka/client-primary/client-primary.properties \\"
+echo "       --topic test_topic'"
+echo ""
+echo "  4. To switch between clusters, update kubernetes-resources/gateway.yaml"
 echo "     and run: kubectl apply -f kubernetes-resources/gateway.yaml -n confluent"
 echo ""
+print_info "Credentials saved to: .env"
 print_info "For more details, see README.md"
 echo ""

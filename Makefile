@@ -147,29 +147,27 @@ gateway-certs: ## Generate gateway TLS certificates
 		2>/dev/null
 	@# Create SAN configuration
 	@echo "$(BLUE)  Creating SAN configuration...$(NC)"
-	@cat > $(GATEWAY_CERT_DIR)/gateway-san.cnf <<-EOF
-	[req]
-	distinguished_name = req_distinguished_name
-	req_extensions = v3_req
-	prompt = no
-
-	[req_distinguished_name]
-	C = $(CERT_COUNTRY)
-	ST = $(CERT_STATE)
-	L = $(CERT_CITY)
-	O = $(CERT_ORG)
-	OU = $(CERT_OU)
-	CN = $(GATEWAY_DOMAIN)
-
-	[v3_req]
-	keyUsage = critical, digitalSignature, keyEncipherment
-	extendedKeyUsage = serverAuth
-	subjectAltName = @alt_names
-
-	[alt_names]
-	DNS.1 = $(GATEWAY_DOMAIN)
-	DNS.2 = *.$(GATEWAY_DOMAIN)
-	EOF
+	@printf '[req]\n\
+distinguished_name = req_distinguished_name\n\
+req_extensions = v3_req\n\
+prompt = no\n\
+\n\
+[req_distinguished_name]\n\
+C = $(CERT_COUNTRY)\n\
+ST = $(CERT_STATE)\n\
+L = $(CERT_CITY)\n\
+O = $(CERT_ORG)\n\
+OU = $(CERT_OU)\n\
+CN = $(GATEWAY_DOMAIN)\n\
+\n\
+[v3_req]\n\
+keyUsage = critical, digitalSignature, keyEncipherment\n\
+extendedKeyUsage = serverAuth\n\
+subjectAltName = @alt_names\n\
+\n\
+[alt_names]\n\
+DNS.1 = $(GATEWAY_DOMAIN)\n\
+DNS.2 = *.$(GATEWAY_DOMAIN)\n' > $(GATEWAY_CERT_DIR)/gateway-san.cnf
 	@# Generate gateway certificate
 	@echo "$(BLUE)  Generating gateway certificate...$(NC)"
 	@openssl genrsa -out $(GATEWAY_CERT_DIR)/gateway-key.pem 2048 2>/dev/null
@@ -197,7 +195,7 @@ gateway-certs: ## Generate gateway TLS certificates
 client-configs: ## Create client configuration files
 	@echo "$(BLUE)Creating client configuration files...$(NC)"
 	@mkdir -p $(CLIENTS_DIR)
-	@# Get API keys from Terraform
+	@# Get API keys from Terraform or .env
 	@if [ -z "$(AWS_CLUSTER_API_KEY)" ]; then \
 		echo "$(YELLOW)⚠ Getting API keys from Terraform...$(NC)"; \
 		cd confluent-terraform && \
@@ -205,37 +203,40 @@ client-configs: ## Create client configuration files
 		export AWS_CLUSTER_API_SECRET=$$(terraform output -raw aws_cluster_api_secret 2>/dev/null) && \
 		export GCP_CLUSTER_API_KEY=$$(terraform output -raw gcp_cluster_api_key 2>/dev/null) && \
 		export GCP_CLUSTER_API_SECRET=$$(terraform output -raw gcp_cluster_api_secret 2>/dev/null) && \
+		grep -v "^AWS_CLUSTER_API_KEY=" ../.env > ../.env.tmp 2>/dev/null || cp ../.env ../.env.tmp; \
+		grep -v "^AWS_CLUSTER_API_SECRET=" ../.env.tmp > ../.env.tmp2 2>/dev/null || cp ../.env.tmp ../.env.tmp2; \
+		grep -v "^GCP_CLUSTER_API_KEY=" ../.env.tmp2 > ../.env.tmp3 2>/dev/null || cp ../.env.tmp2 ../.env.tmp3; \
+		grep -v "^GCP_CLUSTER_API_SECRET=" ../.env.tmp3 > ../.env 2>/dev/null || cp ../.env.tmp3 ../.env; \
+		echo "" >> ../.env; \
+		echo "# Cluster API keys (from Terraform)" >> ../.env; \
 		echo "AWS_CLUSTER_API_KEY=$$AWS_CLUSTER_API_KEY" >> ../.env && \
 		echo "AWS_CLUSTER_API_SECRET=$$AWS_CLUSTER_API_SECRET" >> ../.env && \
 		echo "GCP_CLUSTER_API_KEY=$$GCP_CLUSTER_API_KEY" >> ../.env && \
 		echo "GCP_CLUSTER_API_SECRET=$$GCP_CLUSTER_API_SECRET" >> ../.env && \
+		rm -f ../.env.tmp ../.env.tmp2 ../.env.tmp3 && \
 		cd .. ; \
 	fi
-	@# Reload env
-	$(eval AWS_CLUSTER_API_KEY := $(shell grep AWS_CLUSTER_API_KEY .env 2>/dev/null | cut -d= -f2))
-	$(eval AWS_CLUSTER_API_SECRET := $(shell grep AWS_CLUSTER_API_SECRET .env 2>/dev/null | cut -d= -f2))
-	$(eval GCP_CLUSTER_API_KEY := $(shell grep GCP_CLUSTER_API_KEY .env 2>/dev/null | cut -d= -f2))
-	$(eval GCP_CLUSTER_API_SECRET := $(shell grep GCP_CLUSTER_API_SECRET .env 2>/dev/null | cut -d= -f2))
+	@# Get the LAST occurrence of each variable (most recent)
+	$(eval AWS_CLUSTER_API_KEY := $(shell grep "^AWS_CLUSTER_API_KEY=" .env 2>/dev/null | tail -1 | cut -d= -f2))
+	$(eval AWS_CLUSTER_API_SECRET := $(shell grep "^AWS_CLUSTER_API_SECRET=" .env 2>/dev/null | tail -1 | cut -d= -f2))
+	$(eval GCP_CLUSTER_API_KEY := $(shell grep "^GCP_CLUSTER_API_KEY=" .env 2>/dev/null | tail -1 | cut -d= -f2))
+	$(eval GCP_CLUSTER_API_SECRET := $(shell grep "^GCP_CLUSTER_API_SECRET=" .env 2>/dev/null | tail -1 | cut -d= -f2))
 	@# Create primary cluster config
 	@echo "$(BLUE)  Creating primary cluster config...$(NC)"
-	@cat > $(CLIENTS_DIR)/client-primary.properties <<-EOF
-	security.protocol=SASL_SSL
-	sasl.mechanism=PLAIN
-	sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="$(AWS_CLUSTER_API_KEY)" password="$(AWS_CLUSTER_API_SECRET)";
-	ssl.truststore.location=/etc/kafka/tls/truststore.jks
-	ssl.truststore.password=$(CLIENT_TRUSTSTORE_PASSWORD)
-	ssl.endpoint.identification.algorithm=
-	EOF
+	@printf 'security.protocol=SASL_SSL\n\
+sasl.mechanism=PLAIN\n\
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="$(AWS_CLUSTER_API_KEY)" password="$(AWS_CLUSTER_API_SECRET)";\n\
+ssl.truststore.location=/etc/kafka/tls/truststore.jks\n\
+ssl.truststore.password=$(CLIENT_TRUSTSTORE_PASSWORD)\n\
+ssl.endpoint.identification.algorithm=\n' > $(CLIENTS_DIR)/client-primary.properties
 	@# Create DR cluster config
 	@echo "$(BLUE)  Creating DR cluster config...$(NC)"
-	@cat > $(CLIENTS_DIR)/client-dr.properties <<-EOF
-	security.protocol=SASL_SSL
-	sasl.mechanism=PLAIN
-	sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="$(GCP_CLUSTER_API_KEY)" password="$(GCP_CLUSTER_API_SECRET)";
-	ssl.truststore.location=/etc/kafka/tls/truststore.jks
-	ssl.truststore.password=$(CLIENT_TRUSTSTORE_PASSWORD)
-	ssl.endpoint.identification.algorithm=
-	EOF
+	@printf 'security.protocol=SASL_SSL\n\
+sasl.mechanism=PLAIN\n\
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="$(GCP_CLUSTER_API_KEY)" password="$(GCP_CLUSTER_API_SECRET)";\n\
+ssl.truststore.location=/etc/kafka/tls/truststore.jks\n\
+ssl.truststore.password=$(CLIENT_TRUSTSTORE_PASSWORD)\n\
+ssl.endpoint.identification.algorithm=\n' > $(CLIENTS_DIR)/client-dr.properties
 	@echo "$(GREEN)✓ Client configuration files created$(NC)"
 
 .PHONY: k8s-secrets

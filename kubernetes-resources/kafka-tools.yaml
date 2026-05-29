@@ -6,10 +6,10 @@ metadata:
 spec:
   restartPolicy: Never
   hostAliases:
-    - ip: "34.217.151.188"
+    - ip: "XX.XX.XX.XX"
       hostnames:
         - "kafka.cpc.yesh.com"
-    - ip: "52.26.146.247"
+    - ip: "XX.XX.XX.XX"
       hostnames:
         - "kafka.cpc.yesh.com"
   securityContext:

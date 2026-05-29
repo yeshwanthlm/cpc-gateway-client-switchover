@@ -22,3 +22,16 @@ output "configure_kubectl" {
   description = "Configure kubectl: run the following command to update your kubeconfig"
   value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"
 }
+
+output "kubeconfig_command" {
+  description = "Command to update kubeconfig"
+  value       = <<-EOT
+
+    ╔════════════════════════════════════════════════════════════════╗
+    ║  Update your kubeconfig with the following command:           ║
+    ╠════════════════════════════════════════════════════════════════╣
+    ║  aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}
+    ╚════════════════════════════════════════════════════════════════╝
+
+  EOT
+}
